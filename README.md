@@ -12,7 +12,7 @@ myls path_to_files -l
 ```
 
 -l argument is used for better formatted output with file sizes
--r is optional with -l, doesn't work without -l
+-r is optional with -l, doesn't work without -l (it's very slow with many folders and files)
 
 ## adding to path
 1. type "edit the system environment variables" in search
