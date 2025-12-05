@@ -1,42 +1,4 @@
-use std::{env, fs::{self, DirEntry}, path::{Path, PathBuf}};
-
-fn get_file_count(path: &str) -> i32 {
-    let is_valid_path = PathBuf::from(path);
-
-    if is_valid_path.as_os_str().to_str().is_some() && is_valid_path.exists() {
-        let count = fs::read_dir(path).expect("Expected ReadDir")
-        .filter_map(Result::ok)
-        .filter(|entry| {
-            entry.metadata()
-                .map(|meta| meta.is_file())
-                .unwrap_or(false)
-        })
-        .count();
-
-        return count as i32
-    }
-
-    0
-}
-
-fn get_folder_count(path: &str) -> i32 {
-    let is_valid_path = PathBuf::from(path);
-
-    if is_valid_path.as_os_str().to_str().is_some() && is_valid_path.exists() {
-        let count = fs::read_dir(path).expect("Expected ReadDir")
-        .filter_map(Result::ok)
-        .filter(|entry| {
-            entry.metadata()
-                .map(|meta| meta.is_dir())
-                .unwrap_or(false)
-        })
-        .count();
-
-        return count as i32
-    }
-
-    0
-}
+use std::{env, fs::{self, DirEntry}, path::{Path, PathBuf}, process::exit};
 
 fn remove_first_n_chars(mut text: String, mut n: i32) -> String {
     while n > 0 {
@@ -52,8 +14,11 @@ fn remove_first_n_chars(mut text: String, mut n: i32) -> String {
     text
 }
 
-fn display_default(path: &str) {
+fn display_default(path: &str, grep_search_phrase: Option<String>) {
     let is_valid_path = PathBuf::from(path);
+
+    let mut total_files = 0;
+    let mut total_folders = 0;
 
     if is_valid_path.as_os_str().to_str().is_some() && is_valid_path.exists() {
         let path_res: Result<fs::ReadDir, std::io::Error> = fs::read_dir(path);
@@ -69,10 +34,35 @@ fn display_default(path: &str) {
 
                             match file_metadata {
                                 Ok(metadata) => {
-                                    if metadata.is_file() {
-                                        final_string += &format!("{} ", remove_first_n_chars(dir.path().display().to_string(), path.len() as i32));
-                                    } else {
-                                        final_string += &format!("/{} ", remove_first_n_chars(dir.path().display().to_string(), path.len() as i32));
+                                    match &grep_search_phrase {
+                                        Some(phrase) => {
+                                            let file_name = remove_first_n_chars(dir.path().display().to_string(), path.len() as i32);
+
+                                            if file_name.to_lowercase().contains(&phrase.to_lowercase()) {
+                                                if metadata.is_file() {
+                                                    final_string += &format!("{} ", file_name);
+
+                                                    total_files += 1;
+                                                } else {
+                                                    final_string += &format!("/{} ", file_name);
+
+                                                    total_folders += 1;
+                                                }
+                                            }
+                                        },
+                                        None => {
+                                            let file_name = remove_first_n_chars(dir.path().display().to_string(), path.len() as i32);
+
+                                            if metadata.is_file() {
+                                                final_string += &format!("{} ", file_name);
+
+                                                total_files += 1;
+                                            } else {
+                                                final_string += &format!("/{} ", file_name);
+
+                                                total_folders += 1;
+                                            }
+                                        }
                                     }
                                 },
                                 Err(_e) => {
@@ -91,6 +81,7 @@ fn display_default(path: &str) {
             }
         }
 
+        println!("Total {}: {} files, {} folders", total_files + total_folders, total_files, total_folders);
         println!("{}", final_string);
     }
 }
@@ -117,8 +108,6 @@ fn format_size(bytes: f32) -> String {
 }
 
 fn scan_dir(path: &Path) -> f32 {
-    // println!("path to read: {}", path);
-
     let mut bytes: u64 = 0;
 
     let path_res: Result<fs::ReadDir, std::io::Error> = fs::read_dir(path);
@@ -196,8 +185,13 @@ fn scan_dir(path: &Path) -> f32 {
     bytes as f32
 }
 
-fn display_formatted(path: &str, recursive_folder_scan: bool) {
+fn display_formatted(path: &str, recursive_folder_scan: bool, grep_search_phrase: Option<String>) {
     let is_valid_path = PathBuf::from(path);
+
+    let mut total_files = 0;
+    let mut total_folders = 0;
+
+    let mut final_string = String::new();
 
     if is_valid_path.as_os_str().to_str().is_some() && is_valid_path.exists() {
         let path_res: Result<fs::ReadDir, std::io::Error> = fs::read_dir(path);
@@ -211,14 +205,42 @@ fn display_formatted(path: &str, recursive_folder_scan: bool) {
 
                             match file_metadata {
                                 Ok(metadata) => {
-                                    if metadata.is_file() {
-                                        println!("{:<10} {}", format_size(metadata.len() as f32), remove_first_n_chars(dir.path().display().to_string(), path.len() as i32));
-                                    } else {
-                                        // println!("{:<10} /{}", format_size(metadata.len() as f32), remove_first_n_chars(dir.path().display().to_string(), path.len() as i32));
-                                        if recursive_folder_scan {
-                                            println!("{:<10} /{}", format_size(scan_dir(dir.path().as_path())), remove_first_n_chars(dir.path().display().to_string(), path.len() as i32));
-                                        } else {
-                                            println!("{:<10} /{}", format_size(metadata.len() as f32), remove_first_n_chars(dir.path().display().to_string(), path.len() as i32));
+                                    match &grep_search_phrase {
+                                        Some(phrase) => {
+                                            let file_name = remove_first_n_chars(dir.path().display().to_string(), path.len() as i32);
+
+                                            if file_name.to_lowercase().contains(&phrase.to_lowercase()) {
+                                                if metadata.is_file() {
+                                                    final_string += &format!("{:<10} {}\n", format_size(metadata.len() as f32), file_name);
+
+                                                    total_files += 1;
+                                                } else {
+                                                    if recursive_folder_scan {
+                                                        final_string += &format!("{:<10} /{}\n", format_size(scan_dir(dir.path().as_path())), file_name);
+                                                    } else {
+                                                        final_string += &format!("{:<10} /{}\n", format_size(metadata.len() as f32), file_name);
+                                                    }
+
+                                                    total_folders += 1;
+                                                }
+                                            }
+                                        },
+                                        None => {
+                                            let file_name = remove_first_n_chars(dir.path().display().to_string(), path.len() as i32);
+
+                                            if metadata.is_file() {
+                                                final_string += &format!("{:<10} {}\n", format_size(metadata.len() as f32), file_name);
+
+                                                total_files += 1;
+                                            } else {
+                                                if recursive_folder_scan {
+                                                    final_string += &format!("{:<10} /{}\n", format_size(scan_dir(dir.path().as_path())), file_name);
+                                                } else {
+                                                    final_string += &format!("{:<10} /{}\n", format_size(metadata.len() as f32), file_name);
+                                                }
+
+                                                total_folders += 1;
+                                            }
                                         }
                                     }
                                 },
@@ -237,8 +259,13 @@ fn display_formatted(path: &str, recursive_folder_scan: bool) {
                 // println!("{}", e);
             }
         }
-
     }
+
+    final_string.truncate(final_string.len() - 1);
+
+    println!("Total {}: {} files, {} folders", total_files + total_folders, total_files, total_folders);
+    println!("{:<10} {}", "Size", "Name");
+    println!("{}", final_string);
 }
 
 fn main() {
@@ -248,6 +275,7 @@ fn main() {
 
     let mut formatted_display = false;
     let mut recursive_folder_scan = false;
+    let mut grep_search_phrase: Option<String> = None;
 
     let mut i = 0;
     for item in args.iter() {
@@ -263,19 +291,24 @@ fn main() {
             recursive_folder_scan = true;
         }
 
+        if item.to_lowercase() == "-grep" {
+            if args.len() - 1 >= i + 1 {
+                let word = &args[i + 1];
+
+                grep_search_phrase = Some(word.to_string());
+            } else {
+                println!("Missing -grep arguments!");
+                
+                exit(0);
+            }
+        }
+
         i += 1;
     }
 
-    let file_count = get_file_count(ls_dir);
-    let folder_count = get_folder_count(ls_dir);
-
-    println!("Total {}: {} files, {} folders", file_count + folder_count, file_count, folder_count);
-
     if !formatted_display {
-        display_default(ls_dir);
+        display_default(ls_dir, grep_search_phrase);
     } else if formatted_display {
-        println!("{:<10} {}", "Size", "Name");
-
-        display_formatted(ls_dir, recursive_folder_scan);
+        display_formatted(ls_dir, recursive_folder_scan, grep_search_phrase);
     }
 }
