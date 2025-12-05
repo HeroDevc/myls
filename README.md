@@ -13,6 +13,7 @@ myls path_to_files -l
 
 -l argument is used for better formatted output with file sizes
 -r is optional with -l, doesn't work without -l (it's very slow with many folders and files)
+-grep phrase (replace the phrase with anything you like but without spaces!) is used for folder/file search
 
 ## adding to path
 1. type "edit the system environment variables" in search
